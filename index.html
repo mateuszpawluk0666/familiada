@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Familiada - Tablica</title>
+    <!-- Importujemy font stylizowany na diody LED -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            /* Tło z podziałem czerwony/niebieski tak jak na oryginalnej tablicy */
+            background: linear-gradient(90deg, #c0392b 50%, #2980b9 50%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Czarne łuki na górze */
+        .top-curve {
+            position: absolute;
+            top: -100px;
+            width: 150%;
+            height: 200px;
+            background: #0a0a0a;
+            border-radius: 50%;
+            border-bottom: 8px solid #333;
+            z-index: 1;
+        }
+
+        .board-container {
+            position: relative;
+            z-index: 2;
+            width: 90vw;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Pula na górze */
+        .top-score-box {
+            background: #000;
+            border: 4px solid #4a6fa5;
+            border-radius: 8px;
+            padding: 5px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+
+        .led-text {
+            color: #f1c40f;
+            font-size: 5rem;
+            line-height: 1;
+            text-shadow: 0 0 10px #f1c40f;
+            letter-spacing: 5px;
+        }
+
+        .middle-section {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        /* Punkty drużyn po bokach */
+        .side-score-box {
+            background: #000;
+            border: 4px solid #4a6fa5;
+            border-radius: 8px;
+            padding: 10px 20px;
+            min-width: 150px;
+            text-align: right;
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            margin-bottom: 40px;
+        }
+
+        /* Główny ekran z odpowiedziami */
+        .main-screen {
+            background: #050505;
+            border: 6px solid #4a6fa5;
+            border-radius: 12px;
+            width: 65%;
+            padding: 30px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.9);
+            position: relative;
+            /* Subtelny wzór siatki LED */
+            background-image: radial-gradient(#111 1px, transparent 1px);
+            background-size: 4px 4px;
+        }
+
+        .answer-row {
+            display: flex;
+            font-size: 3.5rem;
+            color: #f1c40f;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            text-shadow: 0 0 8px #f1c40f;
+        }
+
+        .row-num {
+            width: 50px;
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .row-text {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .row-dots {
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: #555;
+            text-shadow: none;
+            letter-spacing: 8px;
+        }
+
+        .row-pts {
+            width: 80px;
+            text-align: right;
+        }
+
+        .bottom-suma {
+            text-align: right;
+            font-size: 3.5rem;
+            color: #f1c40f;
+            text-shadow: 0 0 8px #f1c40f;
+            margin-top: 20px;
+            padding-right: 15px;
+        }
+
+        /* Wyświetlanie X-ów za błędy */
+        .x-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            font-size: 15rem;
+            color: #e74c3c;
+            text-shadow: 0 0 30px #e74c3c, 0 0 60px #c0392b;
+            background: rgba(0,0,0,0.8);
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .x-overlay.show { opacity: 1; }
+
+        /* Ekran startowy (do odblokowania audio) */
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen" onclick="initBoard()">
+        <h1 style="font-size: 3rem; margin-bottom: 20px; color:#f1c40f;">TABLICA FAMILIADY</h1>
+        <p>Kliknij w dowolne miejsce, aby odblokować dźwięk i połączyć z panelem.</p>
+    </div>
+
+    <div class="top-curve"></div>
+
+    <div class="board-container">
+        <div class="top-score-box">
+            <div class="led-text" id="pool-top">0</div>
+        </div>
+
+        <div class="middle-section">
+            <div class="side-score-box">
+                <div class="led-text" id="team1-score">0</div>
+            </div>
+
+            <div class="main-screen">
+                <div id="board-rows">
+                    <!-- Wiersze generowane dynamicznie -->
+                </div>
+                <div class="bottom-suma">
+                    SUMA &nbsp;&nbsp;<span id="pool-bottom">0</span>
+                </div>
+
+                <div class="x-overlay" id="x-display"></div>
+            </div>
+
+            <div class="side-score-box">
+                <div class="led-text" id="team2-score">0</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURACJA DŹWIĘKU ---
+        let audioCtx;
+        
+        function initBoard() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('start-screen').style.display = 'none';
+            renderState(); // Pierwsze renderowanie
+        }
+
+        function playSoundCorrect() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+            osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); 
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function playSoundWrong() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(130.81, audioCtx.currentTime); 
+            osc.frequency.linearRampToValueAtTime(110.00, audioCtx.currentTime + 0.5); 
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        // --- NASŁUCHIWANIE ZMIAN Z PANELU ADMINA ---
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'familiadaState') {
+                renderState();
+            }
+        });
+
+        function renderState() {
+            const stateJSON = localStorage.getItem('familiadaState');
+            if (!stateJSON) return;
+            const state = JSON.parse(stateJSON);
+
+            // Aktualizacja punktów
+            document.getElementById('pool-top').innerText = state.poolScore;
+            document.getElementById('pool-bottom').innerText = state.poolScore;
+            document.getElementById('team1-score').innerText = state.team1Score;
+            document.getElementById('team2-score').innerText = state.team2Score;
+
+            // Renderowanie tablicy (6 wierszy)
+            const board = document.getElementById('board-rows');
+            board.innerHTML = '';
+            for (let i = 0; i < 6; i++) {
+                const odp = state.answers[i];
+                const isRevealed = state.revealed[i];
+                
+                const row = document.createElement('div');
+                row.className = 'answer-row';
+                
+                let contentHTML = '';
+                if (odp && odp.tresc !== "") {
+                    // Pytanie istnieje
+                    if (isRevealed) {
+                        contentHTML = `
+                            <div class="row-num">${i + 1}</div>
+                            <div class="row-text">${odp.tresc}</div>
+                            <div class="row-pts">${odp.punkty}</div>
+                        `;
+                    } else {
+                        contentHTML = `
+                            <div class="row-num">${i + 1}</div>
+                            <div class="row-text">
+                                <span class="row-dots">...................................</span>
+                            </div>
+                            <div class="row-pts"></div>
+                        `;
+                    }
+                } else {
+                    // Puste miejsce (jeśli pytań jest np. tylko 4)
+                    contentHTML = `
+                        <div class="row-num">${i + 1}</div>
+                        <div class="row-text">
+                            <span class="row-dots" style="color:#222;">...................................</span>
+                        </div>
+                        <div class="row-pts"></div>
+                    `;
+                }
+                row.innerHTML = contentHTML;
+                board.appendChild(row);
+            }
+
+            // Obsługa X-ów
+            const xDisplay = document.getElementById('x-display');
+            if (state.showX > 0) {
+                let xs = '';
+                // Pokazuj tylko bieżącą rundę iksów na środku (np. 1, 2 lub 3 iksy naraz)
+                for(let i=0; i<state.showX; i++) xs += 'X ';
+                xDisplay.innerText = xs.trim();
+                xDisplay.classList.add('show');
+            } else {
+                xDisplay.classList.remove('show');
+            }
+
+            // Odtwarzanie dźwięków ze zdarzeń
+            if (state.triggerSound === 'correct') {
+                playSoundCorrect();
+                clearSoundTrigger(state);
+            } else if (state.triggerSound === 'wrong') {
+                playSoundWrong();
+                clearSoundTrigger(state);
+            }
+        }
+
+        function clearSoundTrigger(state) {
+            state.triggerSound = null;
+            localStorage.setItem('familiadaState', JSON.stringify(state));
+        }
+    </script>
+</body>
+</html>

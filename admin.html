@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Familiada - Panel Prowadzącego</title>
+    <style>
+        body { background: #1a202c; color: #fff; font-family: Arial, sans-serif; padding: 20px; }
+        .panel-container { max-width: 800px; margin: 0 auto; background: #2d3748; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h1 { color: #ecc94b; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #ecc94b; padding-bottom: 10px;}
+        
+        .question-info { background: #4a5568; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 1.2rem; font-weight: bold; text-align: center; }
+        
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .control-box { background: #2b6cb0; padding: 15px; border-radius: 8px; text-align: center; }
+        
+        button { padding: 10px 15px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; margin: 5px; width: calc(100% - 10px); }
+        button:hover { opacity: 0.8; }
+        
+        .btn-green { background: #48bb78; }
+        .btn-red { background: #f56565; }
+        .btn-blue { background: #4299e1; }
+        .btn-yellow { background: #ecc94b; color: #000; }
+        
+        .answers-list { background: #1a202c; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .answer-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #4a5568; }
+        .answer-item.revealed { color: #a0aec0; text-decoration: line-through; }
+        .reveal-btn { width: auto; margin: 0; padding: 5px 15px; }
+
+        .score-display { font-size: 1.5rem; color: #ecc94b; margin: 10px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="panel-container">
+        <h1>PANEL PROWADZĄCEGO</h1>
+        
+        <div class="question-info" id="current-question">
+            Ładowanie pytania...
+        </div>
+
+        <div class="answers-list" id="answers-list">
+            <!-- Odpowiedzi do kliknięcia -->
+        </div>
+
+        <div class="controls-grid">
+            <div class="control-box" style="background:#c53030;">
+                <h3>BŁĘDY (X)</h3>
+                <div class="score-display">Błędy w rundzie: <span id="x-count">0</span>/6</div>
+                <button class="btn-yellow" onclick="triggerX()">POKAŻ X (Dźwięk)</button>
+                <button class="btn-blue" onclick="resetX()">Zresetuj Iksy</button>
+            </div>
+
+            <div class="control-box" style="background:#2c7a7b;">
+                <h3>PULA NA TABLICY: <span id="pool-score" class="score-display">0</span></h3>
+                <div style="display: flex; gap:10px; margin-top: 15px;">
+                    <div style="width: 50%;">
+                        D1: <span id="t1-score">0</span>
+                        <button class="btn-green" onclick="givePoolTo(1)">Daj pulę D1</button>
+                    </div>
+                    <div style="width: 50%;">
+                        D2: <span id="t2-score">0</span>
+                        <button class="btn-green" onclick="givePoolTo(2)">Daj pulę D2</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-grid">
+            <div class="control-box">
+                <h3>Ręczna edycja pkt</h3>
+                <button class="btn-yellow" style="width: 45%" onclick="manualScore(1, 10)">+10 D1</button>
+                <button class="btn-red" style="width: 45%" onclick="manualScore(1, -10)">-10 D1</button>
+                <button class="btn-yellow" style="width: 45%" onclick="manualScore(2, 10)">+10 D2</button>
+                <button class="btn-red" style="width: 45%" onclick="manualScore(2, -10)">-10 D2</button>
+            </div>
+
+            <div class="control-box">
+                <h3>Nawigacja</h3>
+                <button class="btn-blue" onclick="prevQuestion()">Poprzednie pytanie</button>
+                <button class="btn-blue" onclick="nextQuestion()">Następne pytanie</button>
+                <button class="btn-red" onclick="resetGame()">RESET CAŁEJ GRY</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // BAZA PYTAŃ - Zawsze maksymalnie 6 odpowiedzi na ekranie
+        const bazaPytan = [
+            {
+                pytanie: "Co robimy w weekend?",
+                odpowiedzi: [
+                    { tresc: "OGLĄDAMY FILMY/SERIALE", punkty: 31 },
+                    { tresc: "GRAMY W GRY", punkty: 23 },
+                    { tresc: "ŚPIMY DO POŁUDNIA", punkty: 18 },
+                    { tresc: "IDZIEMY NA IMPREZĘ", punkty: 11 },
+                    { tresc: "SPRZĄTAMY DOM", punkty: 9 },
+                    { tresc: "CZYTAMY KSIĄŻKI", punkty: 5 }
+                ]
+            },
+            {
+                pytanie: "Co zabieramy na wakacje?",
+                odpowiedzi: [
+                    { tresc: "UBRANIA", punkty: 35 },
+                    { tresc: "PIENIĄDZE", punkty: 25 },
+                    { tresc: "DOKUMENTY", punkty: 15 },
+                    { tresc: "TELEFON", punkty: 12 },
+                    { tresc: "KOSMETYKI", punkty: 8 }
+                    // Jeśli jest mniej niż 6, na tablicy puste zostaną ukryte
+                ]
+            }
+        ];
+
+        let state = {
+            qIndex: 0,
+            answers: [], // Pobierane z bazy
+            revealed: [false, false, false, false, false, false],
+            team1Score: 0,
+            team2Score: 0,
+            poolScore: 0,
+            wrongCount: 0,
+            showX: 0,
+            triggerSound: null
+        };
+
+        function init() {
+            // Próba załadowania stanu z pamięci (żeby odświeżenie strony admina nie kasowało gry)
+            const savedState = localStorage.getItem('familiadaState');
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                // Utrzymujemy tylko wyniki, pytania ładujemy na nowo z kodu dla pewności
+                state.team1Score = parsed.team1Score || 0;
+                state.team2Score = parsed.team2Score || 0;
+                state.qIndex = parsed.qIndex || 0;
+            }
+            loadQuestion(state.qIndex);
+        }
+
+        function loadQuestion(index) {
+            if (index < 0 || index >= bazaPytan.length) {
+                alert("Brak kolejnych pytań!");
+                return;
+            }
+            state.qIndex = index;
+            state.poolScore = 0;
+            state.wrongCount = 0;
+            state.showX = 0;
+            state.triggerSound = null;
+            
+            // Formatujemy 6 slotów odpowiedzi
+            state.answers = [];
+            state.revealed = [false, false, false, false, false, false];
+            for(let i=0; i<6; i++) {
+                if (bazaPytan[index].odpowiedzi[i]) {
+                    state.answers.push(bazaPytan[index].odpowiedzi[i]);
+                } else {
+                    state.answers.push({ tresc: "", punkty: 0 }); // Puste wypełnienie
+                }
+            }
+
+            document.getElementById('current-question').innerText = `Pytanie ${index + 1}: ${bazaPytan[index].pytanie}`;
+            updateUI();
+            saveAndSync();
+        }
+
+        function revealAnswer(index) {
+            if (!state.revealed[index] && state.answers[index].tresc !== "") {
+                state.revealed[index] = true;
+                state.triggerSound = 'correct';
+                
+                // Przelicz pulę
+                state.poolScore = 0;
+                for(let i=0; i<6; i++) {
+                    if (state.revealed[i]) state.poolScore += state.answers[i].punkty;
+                }
+                
+                updateUI();
+                saveAndSync();
+            }
+        }
+
+        function triggerX() {
+            if (state.wrongCount < 6) {
+                state.wrongCount++;
+            }
+            // Zawsze pokazujemy bieżącą ilość błędów jako animację X-ów (np. X X)
+            state.showX = state.wrongCount;
+            state.triggerSound = 'wrong';
+            updateUI();
+            saveAndSync();
+
+            // Ukryj X po 2 sekundach
+            setTimeout(() => {
+                state.showX = 0;
+                saveAndSync();
+            }, 2000);
+        }
+
+        function resetX() {
+            state.wrongCount = 0;
+            state.showX = 0;
+            updateUI();
+            saveAndSync();
+        }
+
+        function givePoolTo(teamNum) {
+            if (teamNum === 1) state.team1Score += state.poolScore;
+            if (teamNum === 2) state.team2Score += state.poolScore;
+            state.poolScore = 0;
+            updateUI();
+            saveAndSync();
+        }
+
+        function manualScore(teamNum, val) {
+            if (teamNum === 1) state.team1Score = Math.max(0, state.team1Score + val);
+            if (teamNum === 2) state.team2Score = Math.max(0, state.team2Score + val);
+            updateUI();
+            saveAndSync();
+        }
+
+        function nextQuestion() { loadQuestion(state.qIndex + 1); }
+        function prevQuestion() { loadQuestion(state.qIndex - 1); }
+        
+        function resetGame() {
+            if(confirm("Na pewno zresetować cały turniej (wyzerować punkty)?")) {
+                localStorage.removeItem('familiadaState');
+                state.team1Score = 0;
+                state.team2Score = 0;
+                loadQuestion(0);
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('t1-score').innerText = state.team1Score;
+            document.getElementById('t2-score').innerText = state.team2Score;
+            document.getElementById('pool-score').innerText = state.poolScore;
+            document.getElementById('x-count').innerText = state.wrongCount;
+
+            const list = document.getElementById('answers-list');
+            list.innerHTML = '';
+            for(let i=0; i<6; i++) {
+                if (state.answers[i].tresc === "") continue;
+                
+                const item = document.createElement('div');
+                item.className = `answer-item ${state.revealed[i] ? 'revealed' : ''}`;
+                item.innerHTML = `
+                    <span>${i+1}. <strong>${state.answers[i].tresc}</strong> (${state.answers[i].punkty} pkt)</span>
+                    <button class="btn-green reveal-btn" onclick="revealAnswer(${i})" ${state.revealed[i] ? 'disabled' : ''}>ODKRYJ</button>
+                `;
+                list.appendChild(item);
+            }
+        }
+
+        function saveAndSync() {
+            localStorage.setItem('familiadaState', JSON.stringify(state));
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
